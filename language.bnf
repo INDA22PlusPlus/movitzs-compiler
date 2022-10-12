@@ -1,0 +1,50 @@
+
+<codeblock> ::= <statement> | ("{" <ows> <statement>* <ows> "}")
+<statement> ::= <if_stmt> | <varassign> | (<break> <semicol>)
+
+<if_stmt> ::= <if> <ows> <if_cond> <ows> <codeblock>
+<if_cond> ::= <lparen> <expr> <rparen>
+<expr> ::= <addt_expr> | <lparen> <addt_expr> <rparen>
+
+<loop_stmt> ::= <loop> <codeblock>
+
+<loop> ::= "loop"
+<break> ::= "break"
+
+<addt_expr> ::= <mul_expr> | <addt_expr> <add> <mul_expr> | <addt_expr> <sub> <mul_expr>
+
+<mul_expr> ::= <unary_expr> | <mul_expr> <mul> <unary_expr> | <mul_expr> <div> <unary_expr>
+<unary_expr> ::= <value> | (<sub> <value>)
+
+<add> ::= "+"
+<sub> ::= "-"
+<mul> ::= "*"
+<div> ::= "/"
+
+<value> ::= <id> | <int>
+
+
+<digit> ::= [0-9]
+<int> ::= <digit>+
+
+
+<if> ::= "if"
+
+<equal> ::= "="
+
+<var> ::= "var"
+<varassign> ::= <var> <id> <ows> <equal> <ows> <expr> <semicol>
+
+<id> ::= <letter> (<letter> | <digit> )*
+
+<lower_letter> ::= [a-z]
+<upper_letter> ::= [A-Z]
+<letter> ::= <lower_letter> | <upper_letter>
+
+<ws> ::= " " | "\t"
+<ows> ::= <ws>*
+
+<semicol> ::= ";"
+
+<lparen> ::= "("
+<rparen> ::= ")"
