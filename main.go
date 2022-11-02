@@ -1,19 +1,14 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-
 	"github.com/InDA22PlusPlus/movitzs-hw3/src/parser"
+	"github.com/InDA22PlusPlus/movitzs-hw3/src/translator"
 )
 
 func main() {
-	println("here")
-	l := parser.New("loop break; loop { var x = 1; break; }")
+	l := parser.New("print 1;")
 
 	c := l.Program()
 
-	x, _ := json.MarshalIndent(c, " ", " ")
-	fmt.Printf("%s\n", x)
-	fmt.Printf("%+#v\n", c.Statements)
+	translator.Translate(c)
 }

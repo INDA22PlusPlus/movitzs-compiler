@@ -24,5 +24,6 @@ const (
 	RCracket
 	Break
 	Loop
+	Print
 	EOF
 )

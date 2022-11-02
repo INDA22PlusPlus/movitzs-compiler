@@ -17,7 +17,11 @@ type VarAss struct {
 
 type IfStatement struct {
 	Condition any
-	Body      any
+	Body      CodeBlock
+}
+
+type PrintStmt struct {
+	Printee any
 }
 
 type OpType int

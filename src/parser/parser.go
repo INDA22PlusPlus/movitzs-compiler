@@ -44,7 +44,7 @@ func (p *Parser) codeblock() CodeBlock {
 
 	if p.peek.TT == lexer.LCracket {
 		p.expect(lexer.LCracket)
-		for p.l.HasNext() && p.peek.TT != lexer.LCracket {
+		for p.l.HasNext() && p.peek.TT != lexer.RCracket {
 			pp.Statements = append(pp.Statements, p.stmt())
 		}
 		p.expect(lexer.RCracket)
@@ -57,6 +57,8 @@ func (p *Parser) codeblock() CodeBlock {
 
 func (p *Parser) stmt() any {
 	switch p.peek.TT {
+	case lexer.Print:
+		return p.print()
 	case lexer.Var:
 		return p.varass()
 	case lexer.If:
@@ -77,10 +79,18 @@ func (p *Parser) stmt() any {
 	}
 }
 
+func (p *Parser) print() PrintStmt {
+	p.expect(lexer.Print)
+	x := PrintStmt{Printee: p.expr()}
+	p.expect(lexer.Semicol)
+	return x
+}
+
 func (p *Parser) if_stmt() IfStatement {
+	p.expect(lexer.If)
 	p.expect(lexer.LParen)
 	e := p.expr()
-	p.expect(lexer.LParen)
+	p.expect(lexer.RParen)
 	return IfStatement{
 		Condition: e,
 		Body:      p.codeblock(),
@@ -172,7 +182,7 @@ func (p *Parser) unry_expr() any {
 		p.nextToken()
 		return ArithmaticStatement{
 			Op:    SubOp,
-			Left:  0,
+			Left:  Integer(0),
 			Right: p.expr(),
 		}
 	}

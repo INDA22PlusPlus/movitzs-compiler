@@ -33,6 +33,7 @@ var rules = []rule{
 	{RParen, regexp.MustCompile(`^\)`)},
 	{LCracket, regexp.MustCompile(`^\{`)},
 	{RCracket, regexp.MustCompile(`^\}`)},
+	{Print, regexp.MustCompile((`^print`))},
 
 	{Loop, regexp.MustCompile(`^loop`)},
 	{Break, regexp.MustCompile(`^break`)},
