@@ -12,102 +12,111 @@ import (
 	"github.com/llir/llvm/ir/value"
 )
 
-var vartable map[string]value.Value
+type Translator struct {
+	curBlock *ir.Block
+	breakTo  *ir.Block
+	vartable map[string]value.Value
+}
 
 var printfCall *ir.Func
 
-func Translate(translatee parser.CodeBlock) {
-	vartable = map[string]value.Value{}
+func (t *Translator) Translate(translatee parser.CodeBlock) {
+	t.vartable = map[string]value.Value{}
 
 	m := ir.NewModule()
 	printfCall = m.NewFunc("printf", types.I32, &ir.Param{Typ: types.I8Ptr})
 	printfCall.Sig.Variadic = true
 
+	//	m.NewFunc("__libc_start_main", types.I32, ir.NewParam("main", &types.FuncType{}))
+
 	f := m.NewFunc("_start", types.Void)
 
-	block := f.NewBlock("mainbl")
-
-	codeblock(&block, translatee)
-
-	block.NewRet(nil)
+	t.curBlock = f.NewBlock("mainbl")
+	t.codeblock(translatee)
+	t.curBlock.NewRet(nil)
 
 	fmt.Println(m.String())
 }
 
-func codeblock(block **ir.Block, x parser.CodeBlock) *ir.Block {
-	//
+func (t *Translator) codeblock(x parser.CodeBlock) {
 	for _, stmt := range x.Statements {
 		switch stmt := stmt.(type) {
 		case parser.CodeBlock:
-			codeblock(block, stmt)
+			t.codeblock(stmt)
 
 		case parser.IfStatement:
-			postIf := (*block).Parent.NewBlock("post_if_" + strconv.Itoa(len((*block).Parent.Blocks)))
-			metaBlock := ifstmt((*block), postIf, stmt)
-			(*block).NewBr(metaBlock)
-			(*block) = postIf
+			t.ifstmt(stmt)
 
 		case parser.VarAss:
-			varr := (*block).NewAdd(constant.NewInt(types.I64, 0), val((*block), stmt.Val))
+			varr := t.curBlock.NewAdd(constant.NewInt(types.I64, 0), t.val(stmt.Val))
 
 			varr.SetName(stmt.Ident)
-			vartable[stmt.Ident] = varr
+			t.vartable[stmt.Ident] = varr
 
 		case parser.LoopStatement:
-			/*
-				lbb := (*block).Parent.NewBlock("loopBody")
-				codeblock(&lbb, parser.CodeBlock(stmt))
 
-				loopBlock := (*block).Parent.NewBlock("loop")
-				loopBlock.NewBr(lbb)
-				loopBlock.NewBr(loopBlock)
+			loopBlock := t.curBlock.Parent.NewBlock(t.name("loop_body"))
 
-				(*block).NewBr(loopBlock)
-			*/
+			t.curBlock.NewBr(loopBlock)
+
+			breakTo := t.curBlock.Parent.NewBlock(t.name("break_to"))
+			t.breakTo = breakTo
+			t.curBlock = loopBlock
+			t.codeblock(parser.CodeBlock(stmt))
+
+			if t.curBlock.Term == nil {
+				t.curBlock.NewBr(loopBlock)
+			}
+			t.curBlock = breakTo
 
 		case parser.BreakKeyword:
-			// todo
+			t.curBlock.NewBr(t.breakTo)
+			t.breakTo = nil
+
 		case parser.PrintStmt:
 
 			y := constant.NewCharArrayFromString("%d\n" + string([]byte{0}))
 			typex := types.NewPointer(types.NewArray(uint64(5), types.I8))
 
 			// zero := constant.NewInt(types.I32, 0)
-			x := (*block).NewGetElementPtr(typex, y)
+			x := t.curBlock.NewGetElementPtr(typex, y)
 
 			// wtf do i do
 
-			(*block).NewCall(printfCall, x, expr((*block), stmt.Printee))
+			t.curBlock.NewCall(printfCall, x, t.expr(stmt.Printee))
 		default:
 			fmt.Printf("could not find type %T\n", stmt)
 			panic("unknown block")
 		}
 	}
-
-	return *block
 }
 
-func ifstmt(parent *ir.Block, postIf *ir.Block, x parser.IfStatement) *ir.Block {
-	metaBlock := parent.Parent.NewBlock("if_meta_" + strconv.Itoa(len(parent.Parent.Blocks)))
+func (t *Translator) ifstmt(x parser.IfStatement) {
+	metaBlock := t.curBlock.Parent.NewBlock(t.name("if_meta"))
+	t.curBlock.NewBr(metaBlock)
 
-	ifBody := parent.Parent.NewBlock("if_body_" + strconv.Itoa(len(parent.Parent.Blocks)))
-	codeblock(&ifBody, x.Body)
-	ifBody.NewBr(postIf)
+	ifBody := t.curBlock.Parent.NewBlock(t.name("if_body"))
+	postIf := t.curBlock.Parent.NewBlock(t.name("post_if"))
 
+	t.curBlock = metaBlock
 	zero := constant.NewInt(types.I64, 0)
-	cond := metaBlock.NewICmp(enum.IPredEQ, zero, expr(metaBlock, x.Condition))
+	cond := metaBlock.NewICmp(enum.IPredEQ, zero, t.expr(x.Condition))
 
 	metaBlock.NewCondBr(cond, ifBody, postIf)
 
-	return metaBlock
+	t.curBlock = ifBody
+	ifBody.NewBr(postIf) // might be overridden by break
+	t.codeblock(x.Body)
+
+	t.curBlock = postIf
 }
 
-func val(block *ir.Block, x any) value.Value {
+func (t *Translator) val(x any) value.Value {
 	switch l := x.(type) {
 	case parser.ArithmaticStatement:
-		return expr(block, l)
+		return t.expr(l)
 	case parser.Identifier:
-		return vartable[string(l)]
+		return t.vartable[string(l)]
 	case parser.Integer:
 		return constant.NewInt(types.I64, int64(l))
 
@@ -116,26 +125,32 @@ func val(block *ir.Block, x any) value.Value {
 	panic("nah")
 }
 
-func expr(block *ir.Block, xx any) value.Value {
-	switch t := xx.(type) {
+func (t *Translator) expr(xx any) value.Value {
+	switch tt := xx.(type) {
 	case parser.Integer:
-		return block.NewAdd(constant.NewInt(types.I64, 0), constant.NewInt(types.I64, int64(t)))
+		return t.curBlock.NewAdd(constant.NewInt(types.I64, 0), constant.NewInt(types.I64, int64(tt)))
+	case parser.Identifier:
+		return t.curBlock.NewAdd(constant.NewInt(types.I64, 0), t.vartable[string(tt)])
 	}
 
 	x := xx.(parser.ArithmaticStatement)
 
-	left := val(block, x.Left)
-	right := val(block, x.Right)
+	left := t.val(x.Left)
+	right := t.val(x.Right)
 
 	switch x.Op {
 	case parser.AddOp:
-		return block.NewAdd(left, right)
+		return t.curBlock.NewAdd(left, right)
 	case parser.SubOp:
-		return block.NewSub(left, right)
+		return t.curBlock.NewSub(left, right)
 	case parser.MulOp:
-		return block.NewMul(left, right)
+		return t.curBlock.NewMul(left, right)
 	case parser.DivOp:
-		return block.NewSDiv(left, right) // is this correct?
+		return t.curBlock.NewSDiv(left, right) // is this correct?
 	}
 	panic("no")
+}
+
+func (t *Translator) name(xx string) string {
+	return xx + "_" + strconv.Itoa(len(t.curBlock.Parent.Blocks))
 }
