@@ -8,7 +8,7 @@ import (
 // exempel på hur man gör broken kod: loop {var x = 1; break; var xx = 2;}
 
 func main() {
-	l := parser.New("var x = 1; loop { var x = x + 1; }")
+	l := parser.New("var x = 666; loop { var x = x + x; }")
 
 	c := l.Program()
 

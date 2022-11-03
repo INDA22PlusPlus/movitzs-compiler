@@ -15,18 +15,19 @@ import (
 type Translator struct {
 	curBlock *ir.Block
 	breakTo  *ir.Block
-	vartable map[string]value.Value
+	vartable map[string]*ir.InstAlloca
 }
 
 var printfCall *ir.Func
 
 func (t *Translator) Translate(translatee parser.CodeBlock) {
-	t.vartable = map[string]value.Value{}
+	t.vartable = map[string]*ir.InstAlloca{}
 
 	m := ir.NewModule()
 	printfCall = m.NewFunc("printf", types.I32, &ir.Param{Typ: types.I8Ptr})
 	printfCall.Sig.Variadic = true
 
+	// m.NewAlias("printfarg", constant.NewArray(&types.ArrayType{ElemType: types.I8, Len: 4}, constant.NewInt(types.I8, int64(rune('A')))))
 	//	m.NewFunc("__libc_start_main", types.I32, ir.NewParam("main", &types.FuncType{}))
 
 	f := m.NewFunc("_start", types.Void)
@@ -48,10 +49,16 @@ func (t *Translator) codeblock(x parser.CodeBlock) {
 			t.ifstmt(stmt)
 
 		case parser.VarAss:
-			varr := t.curBlock.NewAdd(constant.NewInt(types.I64, 0), t.val(stmt.Val))
+			varr, ok := t.vartable[stmt.Ident]
 
-			varr.SetName(stmt.Ident)
-			t.vartable[stmt.Ident] = varr
+			if !ok {
+				varr = t.curBlock.NewAlloca(types.NewInt(64))
+				t.vartable[stmt.Ident] = varr
+			}
+
+			x := t.curBlock.NewAdd(constant.NewInt(types.I64, 0), t.val(stmt.Val))
+
+			t.curBlock.NewStore(x, varr)
 
 		case parser.LoopStatement:
 
@@ -116,7 +123,7 @@ func (t *Translator) val(x any) value.Value {
 	case parser.ArithmaticStatement:
 		return t.expr(l)
 	case parser.Identifier:
-		return t.vartable[string(l)]
+		return t.curBlock.NewLoad(types.I64, t.vartable[string(l)])
 	case parser.Integer:
 		return constant.NewInt(types.I64, int64(l))
 
